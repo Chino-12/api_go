@@ -79,6 +79,10 @@ func main() {
 	// Definir las rutas de la API
 	r.HandleFunc("/login", login).Methods("POST")       // Endpoint para login
 	r.HandleFunc("/register", register).Methods("POST") // Endpoint para registro
+	r.HandleFunc("/test", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"message": "Test successful"})
+	}).Methods("GET")
 
 	// Configurar CORS
 	c := cors.New(cors.Options{
@@ -96,15 +100,15 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", handler))
 }
 
+const (
+	// Puedes ajustar estos valores según necesites
+	TOKEN_EXPIRATION         = 72 * time.Hour  // 3 días
+	REFRESH_TOKEN_EXPIRATION = 168 * time.Hour // 7 días
+)
+
 // Función para manejar el login
 func login(w http.ResponseWriter, r *http.Request) {
 	var user User
-
-	// Agregar headers CORS
-	w.Header().Set("Access-Control-Allow-Origin", "http://localhost:4200")
-	w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-	w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
-	w.Header().Set("Access-Control-Allow-Credentials", "true")
 
 	// Handle preflight
 	if r.Method == "OPTIONS" {
@@ -138,21 +142,35 @@ func login(w http.ResponseWriter, r *http.Request) {
 	// Generar un token JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"email": dbUser.Email,
-		"exp":   time.Now().Add(time.Hour * 24).Unix(), // Token expira en 24 horas
+		"exp":   time.Now().Add(TOKEN_EXPIRATION).Unix(), // Usar la constante
+		"iat":   time.Now().Unix(),                       // Tiempo de emisión
 	})
 
 	tokenString, err := token.SignedString(jwtSecret)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]string{"error": "Error al generar el token"})
+		http.Error(w, "Error interno del servidor", http.StatusInternalServerError)
 		return
 	}
 
-	// Devolver el token
+	// Opcional: Crear refresh token
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"email": dbUser.Email,
+		"exp":   time.Now().Add(REFRESH_TOKEN_EXPIRATION).Unix(),
+		"type":  "refresh",
+	})
+
+	refreshTokenString, err := refreshToken.SignedString(jwtSecret)
+	if err != nil {
+		http.Error(w, "Error interno del servidor", http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"token":   tokenString,
-		"message": "Login exitoso",
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"token":        tokenString,
+		"refreshToken": refreshTokenString,
+		"expiresIn":    TOKEN_EXPIRATION.Seconds(),
+		"message":      "Login exitoso",
 	})
 }
 
