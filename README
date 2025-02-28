@@ -1,0 +1,21 @@
+º# Auth API
+
+Esta es una API de autenticación básica construida con Go y MongoDB.
+
+## Requisitos
+
+- Go 1.20+
+- MongoDB
+
+## Instalación
+
+1. Clona el repositorio.
+2. Ejecuta `go mod tidy` para instalar las dependencias.
+3. Crea un archivo `.env` con la variable `MONGODB_URI`.
+4. Ejecuta `go run cmd/main.go` para iniciar el servidor.
+
+## Endpoints
+
+- `POST /login`: Iniciar sesión.
+- `POST /register`: Registrar un nuevo usuario.
+- `GET /api/test`: Endpoint protegido para pruebas.
