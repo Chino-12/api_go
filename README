@@ -1,21 +1,139 @@
-º# Auth API
+Auth API with Go, MongoDB, and Air (Live Reload)
+A basic authentication API built with Go, MongoDB, and configured with Air for automatic reloading during development.
 
-Esta es una API de autenticación básica construida con Go y MongoDB.
+🚀 Features
+✅ JWT Authentication (Register/Login)
+✅ MongoDB for data storage
+✅ Password hashing with bcrypt
+✅ Middleware for protected routes
+✅ Live reload with Air
 
-## Requisitos
+📦 Installation
+1. Clone the repository
+git clone https://github.com/Chino-12/api_go.git
+cd api-go   
 
-- Go 1.20+
-- MongoDB
+2. Set up environment variables
 
-## Instalación
 
-1. Clona el repositorio.
-2. Ejecuta `go mod tidy` para instalar las dependencias.
-3. Crea un archivo `.env` con la variable `MONGODB_URI`.
-4. Ejecuta `go run cmd/main.go` para iniciar el servidor.
+ Run `go mod tidy` to install dependencies
+ Create a `.env` file with the following variables:
 
-## Endpoints
 
-- `POST /login`: Iniciar sesión.
-- `POST /register`: Registrar un nuevo usuario.
-- `GET /api/test`: Endpoint protegido para pruebas.
+cp .env.example .env
+
+
+Edit .env with your MongoDB and JWT settings:
+
+MONGO_URI=mongodb://localhost:27017
+DB_NAME=authdb
+JWT_SECRET=your_secure_jwt_secret_here
+
+Run `go run cmd/main.go` to start the server
+
+3. Install dependencies
+
+go mod download
+
+
+
+4. Install Air (for live reload)
+
+go install github.com/cosmtrek/air@latest
+
+
+
+⚙️ Configuration
+Air Configuration (.air.toml)
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+  cmd = "go build -o ./tmp/main ."
+  bin = "./tmp/main"
+  include_ext = ["go", "env"]
+  exclude_dir = ["tmp", "vendor", "docs"]
+  delay = 1000
+
+[log]
+  time = true
+
+[color]
+  main = "magenta"
+  watcher = "cyan"
+🚀 Running the API
+
+
+1. Start the server (with live reload)
+
+air
+
+
+2. Without Air (manual)
+go run .
+
+
+
+
+
+🔐 Endpoints
+Method	Endpoint	Description
+POST	/register	Register a new user
+POST	/login	    Login & get JWT token
+GET     /api/test   Protected test endpoint (requires authentication)
+📂 Project Structure
+/auth-api
+├── .air.toml          # Air live-reload config
+├── .env               # Environment variables
+├── main.go            # Entry point
+├── go.mod             # Go modules
+│
+├── /controllers       # Request handlers
+│   └── auth.go
+│
+├── /database          # MongoDB connection
+│   └── db.go
+│
+├── /middleware        # JWT middleware
+│   └── auth.go
+│
+├── /models            # Data models
+│   └── user.go
+│
+└── /utils             # Helpers (hashing, etc.)
+    └── hash.go
+
+
+
+🛡️ Protected Routes Example
+
+r := gin.Default()
+
+// Public routes
+r.POST("/register", controllers.Register)
+r.POST("/login", controllers.Login)
+
+// Protected route (JWT required)
+r.GET("/protected", middleware.AuthMiddleware(), func(c *gin.Context) {
+    c.JSON(200, gin.H{"message": "You are authenticated!"})
+})
+
+
+
+
+📌 Notes
+Air is only for development. In production, use:
+
+
+go build -o app && ./app
+Always keep .env secure and out of version control.
+
+🔗 References
+Air (Live Reload)
+
+Gin Web Framework
+
+MongoDB Go Driver
+
+ Your API now supports JWT auth + live reload for smooth development. 🚀

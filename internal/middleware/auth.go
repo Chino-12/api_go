@@ -15,12 +15,16 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		// Get the Authorization header from the request
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			http.Error(w, "No se proporcionó el token", http.StatusUnauthorized)
+			respondWithError(w, http.StatusUnauthorized, "Authorization token required")
 			return
 		}
 
 		// Extract the token from the "Bearer <token>" format
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader { // No Bearer prefix found
+			respondWithError(w, http.StatusUnauthorized, "Invalid token format. Use Bearer <token>")
+			return
+		}
 
 		// Parse and validate the token
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
@@ -28,8 +32,13 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		})
 
 		// Check if the token is valid
-		if err != nil || !token.Valid {
-			http.Error(w, "Token inválido", http.StatusUnauthorized)
+		if err != nil {
+			respondWithError(w, http.StatusUnauthorized, "Invalid token: "+err.Error())
+			return
+		}
+
+		if !token.Valid {
+			respondWithError(w, http.StatusUnauthorized, "Token is not valid")
 			return
 		}
 

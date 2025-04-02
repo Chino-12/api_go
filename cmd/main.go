@@ -13,26 +13,29 @@ import (
 )
 
 func main() {
+	// Initialize database connection
 	database.Connect()
 
-	// Configure the router
+	// Create a new router using gorilla/mux
 	r := mux.NewRouter()
 
-	r.Use(middleware.ErrorHandler)
+	// Register middleware
+	r.Use(middleware.ErrorHandler)        // Custom error handling middleware
+	r.Use(middleware.RateLimitMiddleware) // Rate limiting middleware (5 requests/sec per IP)
 
-	// public routs
+	// Public routes (no authentication required)
 	r.HandleFunc("/login", handlers.Login).Methods("POST")
 	r.HandleFunc("/register", handlers.Register).Methods("POST")
 
-	// Configure CORS
+	// Configure CORS (Cross-Origin Resource Sharing)
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:4200"},
+		AllowedOrigins:   []string{"http://localhost:4200"}, // Allow frontend origin
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
-		AllowCredentials: true,
+		AllowCredentials: true, // Allow cookies and credentials
 	})
 
-	// start the serve
-	log.Println("Servidor corriendo en http://localhost:8080")
+	// Start the HTTP server with CORS and router
+	log.Println("Server running on http://localhost:8080")
 	log.Fatal(http.ListenAndServe(":8080", c.Handler(r)))
 }

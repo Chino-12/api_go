@@ -17,7 +17,7 @@ var (
 	Client    *mongo.Client
 	Coll      *mongo.Collection
 	Ctx       context.Context
-	JwtSecret = []byte("esTRADA151200") // JWT secret key (hardcoded for now)
+	JwtSecret []byte
 )
 
 // Connect establishes a connection to the MongoDB database
@@ -32,6 +32,13 @@ func Connect() {
 	if uri == "" {
 		log.Fatal("Missing environment variable: MONGODB_URI")
 	}
+
+	// Retrieve the JWT Secret from environment variables
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("Missing environment variable: JWT_SECRET")
+	}
+	JwtSecret = []byte(jwtSecret)
 
 	// Create a context with a timeout of 10 seconds
 	Ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
