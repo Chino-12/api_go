@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"log"
+	"net"
 	"net/http"
 	"sync"
 
@@ -9,70 +11,64 @@ import (
 
 // IPRateLimiter maintains rate limiters for individual IP addresses
 type IPRateLimiter struct {
-	ips map[string]*rate.Limiter // Map of IP addresses to their respective limiters
-	mu  *sync.RWMutex            // Mutex to ensure thread-safe access to the map
-	r   rate.Limit               // Requests per second limit
-	b   int                      // Burst size (maximum allowed spikes)
+	limiters sync.Map   // Thread-safe map to store rate limiters per IP
+	rate     rate.Limit // Rate limit (requests per second)
+	burst    int        // Maximum burst size (additional allowed requests)
 }
 
-// NewIPRateLimiter creates a new instance of IPRateLimiter
-// Parameters:
-//   - r: rate limit (requests per second)
-//   - b: burst size (maximum allowed spikes)
-func NewIPRateLimiter(r rate.Limit, b int) *IPRateLimiter {
+// NewIPRateLimiter creates a new rate limiter instance configured for 5 requests per 30 seconds
+func NewIPRateLimiter() *IPRateLimiter {
 	return &IPRateLimiter{
-		ips: make(map[string]*rate.Limiter),
-		mu:  &sync.RWMutex{},
-		r:   r,
-		b:   b,
+		rate:  rate.Limit(5.0 / 30.0), // 5 requests every 30 seconds (0.166... req/sec)
+		burst: 0,
 	}
 }
 
-// AddIP creates a new rate limiter for an IP address and adds it to the map
-func (i *IPRateLimiter) AddIP(ip string) *rate.Limiter {
-	i.mu.Lock()
-	defer i.mu.Unlock()
-
-	limiter := rate.NewLimiter(i.r, i.b)
-	i.ips[ip] = limiter
-
-	return limiter
-}
-
-// GetLimiter returns the rate limiter for the given IP address
-// If no limiter exists, it creates a new one
-func (i *IPRateLimiter) GetLimiter(ip string) *rate.Limiter {
-	i.mu.RLock()
-	limiter, exists := i.ips[ip]
-	i.mu.RUnlock()
-
+// GetLimiter retrieves or creates a rate limiter for the given IP address
+func (l *IPRateLimiter) GetLimiter(ip string) *rate.Limiter {
+	// Check if limiter already exists for this IP
+	limiter, exists := l.limiters.Load(ip)
 	if !exists {
-		return i.AddIP(ip)
+		// Create new limiter if none exists
+		newLimiter := rate.NewLimiter(l.rate, l.burst)
+		l.limiters.Store(ip, newLimiter)
+		return newLimiter
 	}
-
-	return limiter
+	return limiter.(*rate.Limiter)
 }
 
-// RateLimitMiddleware is an HTTP middleware that enforces rate limiting
-// It limits each IP to 5 requests per second with a burst of 1
+// Global limiter instance
+var ipLimiter = NewIPRateLimiter()
+
+// getClientIP extracts the client IP address from the request
+
+func getClientIP(r *http.Request) string {
+	// Check for proxy-forwarded IP first
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		return ip
+	}
+	// Fall back to direct connection IP (removing port if present)
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
+}
+
+// RateLimitMiddleware is an HTTP middleware that enforces rate limiting per IP
 func RateLimitMiddleware(next http.Handler) http.Handler {
-	// Initialize rate limiter with 5 requests/sec and burst of 1
-	limiter := NewIPRateLimiter(5, 1)
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Get client IP address
-		ip := r.RemoteAddr
-
-		// Get or create rate limiter for this IP
-		limiter := limiter.GetLimiter(ip)
+		ip := getClientIP(r)
+		limiter := ipLimiter.GetLimiter(ip)
 
 		// Check if request is allowed
 		if !limiter.Allow() {
+			log.Printf("⛔ Rate limit exceeded for IP: %s\n", ip)
 			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
 			return
 		}
 
-		// Proceed to next handler if rate limit is not exceeded
+		log.Printf("✅ Request allowed from IP: %s\n", ip)
 		next.ServeHTTP(w, r)
 	})
 }
